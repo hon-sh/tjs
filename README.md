@@ -1,3 +1,12 @@
+# use zig as the build system
+
+/wip
+
+* make (because build.zig is not finished yet)
+* zig build install
+* or zig build install --release=small -p zig-out/small
+
+<hr style="margin: 20px 0" />
 
 <p align="center">
     <img width="480" src="https://raw.githubusercontent.com/saghul/txiki.js/master/logo.png" />

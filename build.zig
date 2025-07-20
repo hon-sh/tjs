@@ -47,21 +47,10 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(lib_tjs);
     exe.linkLibrary(lib_qjs);
     exe.linkLibrary(lib_sql);
-
-    // exe.linkSystemLibrary("curl");
-    exe.linkSystemLibrary2("curl", .{
-        .preferred_link_mode = .static,
-    });
-
     exe.linkLibrary(lib_uv);
-    // exe.addLibraryPath(b.path("build/deps/libuv"));
-    // exe.linkSystemLibrary2("uv", .{
-    //     .preferred_link_mode = .static,
-    // });
-
     exe.linkLibrary(lib_m3);
-    // exe.addLibraryPath(b.path("build/deps/wasm3/source"));
-    // exe.linkSystemLibrary("m3");
+
+    exe.linkSystemLibrary("curl");
 
     b.installArtifact(exe);
 }
@@ -124,6 +113,16 @@ fn mktjs(b: *std.Build, mod_opts: std.Build.Module.CreateOptions) *std.Build.Ste
             "-DTJS__PLATFORM=\"zig\"",
         },
     });
+
+    lib.addConfigHeader(b.addConfigHeader(.{
+        .style = .{ .cmake = b.path("src/version.h.in") },
+    }, .{
+        .TJS__VERSION_MAJOR = 24,
+        .TJS__VERSION_MINOR = 12,
+        .TJS__VERSION_PATCH = 0,
+        .TJS__VERSION_SUFFIX = "",
+    }));
+
     return lib;
 }
 
@@ -172,7 +171,7 @@ fn mkuv(b: *std.Build, mod_opts: std.Build.Module.CreateOptions) *std.Build.Step
     lib.addIncludePath(b.path("deps/libuv/include"));
     lib.addIncludePath(b.path("deps/libuv/src"));
 
-    // thanks to https://github.com/mitchellh/zig-libuv/blob/main/build.zig
+    // thanks https://github.com/mitchellh/zig-libuv/blob/main/build.zig
     var flags = std.ArrayList([]const u8).init(b.allocator);
     defer flags.deinit();
 

@@ -1,10 +1,13 @@
 # use zig as the build system
 
-/wip
-
-* make (because build.zig is not finished yet)
+* zig >= v0.14.1
 * zig build install
 * or zig build install --release=small -p zig-out/small
+
+## TODO
+
+* [ ] static link curl
+
 
 <hr style="margin: 20px 0" />
 

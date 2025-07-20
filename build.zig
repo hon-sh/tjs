@@ -7,6 +7,21 @@ pub fn build(b: *std.Build) void {
     const strip = b.option(bool, "strip", "Omit debug information");
     const pic = b.option(bool, "pie", "Produce Position Independent Code");
 
+    var os_platform: []const u8 = undefined;
+    {
+        const os_tag = target.result.os.tag;
+        if (os_tag.isDarwin()) {
+            os_platform = "darwin";
+        } else if (os_tag == .windows) {
+            os_platform = "windows";
+        } else if (os_tag == .linux) {
+            os_platform = "linux";
+        } else {
+            std.log.err("unsupported os {s}", .{@tagName(os_tag)});
+            @panic("unsupported os");
+        }
+    }
+
     const mod_opts: std.Build.Module.CreateOptions = .{
         .target = target,
         .optimize = optimize,
@@ -15,13 +30,33 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     };
 
-    const lib_tjs = mktjs(b, mod_opts);
+    var lib_curl: *std.Build.Step.Compile = undefined;
+    {
+        const curl_mod = b.dependency("curl", .{
+            .target = target,
+            .optimize = optimize,
+        }).module("curl");
+        for (curl_mod.link_objects.items) |item| switch (item) {
+            .other_step => |c| {
+                // std.debug.print("curl mod deps: {s}\n", .{c.name});
+
+                if (std.mem.eql(u8, c.name, "curl")) {
+                    lib_curl = c;
+                }
+            },
+            else => {},
+        };
+    }
+
+    const tjs_cflags: []const []const u8 = &.{
+        b.fmt("-DTJS__PLATFORM=\"{s}\"", .{os_platform}),
+    };
+
+    const lib_tjs = mktjs(b, mod_opts, lib_curl, tjs_cflags);
     const lib_qjs = mkqjs(b, mod_opts);
     const lib_sql = mksql(b, mod_opts);
     const lib_uv = mkuv(b, mod_opts);
     const lib_m3 = mkm3(b, mod_opts);
-
-    // mkcurl
 
     b.step("i-tjs", "").dependOn(&lib_tjs.step);
     b.step("i-uv", "").dependOn(&lib_uv.step);
@@ -40,17 +75,14 @@ pub fn build(b: *std.Build) void {
     addIncludePaths(b, exe);
     exe.addCSourceFile(.{
         .file = b.path("src/cli.c"),
-        .flags = &.{
-            "-DTJS__PLATFORM=\"zig\"",
-        },
+        .flags = tjs_cflags,
     });
     exe.linkLibrary(lib_tjs);
     exe.linkLibrary(lib_qjs);
     exe.linkLibrary(lib_sql);
     exe.linkLibrary(lib_uv);
     exe.linkLibrary(lib_m3);
-
-    exe.linkSystemLibrary("curl");
+    exe.linkLibrary(lib_curl);
 
     b.installArtifact(exe);
 }
@@ -63,12 +95,26 @@ fn addIncludePaths(b: *std.Build, lib: anytype) void {
     lib.addIncludePath(b.path("deps/sqlite3"));
 }
 
-fn mktjs(b: *std.Build, mod_opts: std.Build.Module.CreateOptions) *std.Build.Step.Compile {
+fn mktjs(b: *std.Build, mod_opts: std.Build.Module.CreateOptions, lib_curl: *std.Build.Step.Compile, flags: []const []const u8) *std.Build.Step.Compile {
     const lib = b.addLibrary(.{
         .name = "tjs",
         .linkage = .static,
         .root_module = b.createModule(mod_opts),
     });
+
+    for (lib_curl.root_module.include_dirs.items) |include_dir| switch (include_dir) {
+        .path => |path| switch (path) {
+            .dependency => |src_path| {
+                // std.debug.print("lib_curl .dependency inclues: {s}\n", .{src_path.sub_path});
+
+                if (std.mem.endsWith(u8, src_path.sub_path, "include")) {
+                    lib.addIncludePath(path);
+                }
+            },
+            else => {},
+        },
+        else => {},
+    };
 
     addIncludePaths(b, lib);
 
@@ -109,9 +155,7 @@ fn mktjs(b: *std.Build, mod_opts: std.Build.Module.CreateOptions) *std.Build.Ste
             "src/bundles/c/core/worker-bootstrap.c",
             "deps/quickjs/cutils.c",
         },
-        .flags = &.{
-            "-DTJS__PLATFORM=\"zig\"",
-        },
+        .flags = flags,
     });
 
     lib.addConfigHeader(b.addConfigHeader(.{

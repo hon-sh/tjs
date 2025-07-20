@@ -6,8 +6,9 @@
 
 ## TODO
 
-* [ ] static link curl
-
+* [ ] ffi
+* [ ] windows
+* [x] static link curl
 
 <hr style="margin: 20px 0" />
 
